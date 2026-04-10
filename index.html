@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASB — Painel de Vendedores</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#c8a04a',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0f1117; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="dark">
+<div id="root"></div>
+
+<script type="text/babel">
+const SUPABASE_URL  = 'https://bovzlvumowgmqlfzciah.supabase.co';
+// TEMP: service key para validação — reverter para anon+RLS após confirmar painel
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvdnpsdnVtb3dnbXFsZnpjaWFoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzEwMjkxMCwiZXhwIjoyMDg4Njc4OTEwfQ.JDsJuWzf5b16orRrBYUwaU5y6HY9zEQGiuoSQeIE2JM';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── Helpers ────────────────────────────────────────────────
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+};
+
+const tempBadge = (t) => {
+  const map = {
+    HOT:  'bg-red-500/20 text-red-400 border border-red-500/30',
+    WARM: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+    COLD: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  };
+  return map[t] || 'bg-gray-700 text-gray-400';
+};
+
+const statusBadge = (s) => {
+  const map = {
+    new:       'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+    qualified: 'bg-green-500/20 text-green-400 border border-green-500/30',
+    converted: 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30',
+    optout:    'bg-gray-700/50 text-gray-500 border border-gray-600/30',
+    high_value:'bg-orange-500/20 text-orange-400 border border-orange-500/30',
+  };
+  return map[s] || 'bg-gray-700 text-gray-400';
+};
+
+const statusLabel = (s) => ({
+  new: 'Novo', qualified: 'Qualificado', converted: 'Convertido',
+  optout: 'Opt-out', high_value: 'Alto Valor'
+}[s] || s);
+
+const rtLabel = (rt) => ({
+  ana_paula: 'Ana Paula', alan: 'Alan', setor_cuit: 'CUIT'
+}[rt] || rt || '—');
+
+// ─── Tela de Login ───────────────────────────────────────────
+function Login({ onLogin }) {
+  const [email, setEmail]   = React.useState('');
+  const [pass, setPass]     = React.useState('');
+  const [error, setError]   = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    const { error: err } = await sb.auth.signInWithPassword({ email, password: pass });
+    setLoading(false);
+    if (err) setError(err.message);
+    else onLogin();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0f1117] px-4">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand/10 border border-brand/30 mb-4">
+            <span className="text-2xl font-bold text-brand">ASB</span>
+          </div>
+          <h1 className="text-xl font-semibold text-white">American Steak Brasil</h1>
+          <p className="text-sm text-gray-500 mt-1">Painel de Vendedores</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-[#1a1d27] border border-gray-800 rounded-2xl p-6 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-400 mb-1.5 block">Email</label>
+            <input
+              type="email" required autoFocus
+              value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="seu@asb.com"
+              className="w-full bg-[#0f1117] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand/60 transition"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-400 mb-1.5 block">Senha</label>
+            <input
+              type="password" required
+              value={pass} onChange={e => setPass(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-[#0f1117] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand/60 transition"
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+          )}
+          <button
+            type="submit" disabled={loading}
+            className="w-full bg-brand hover:bg-brand/90 disabled:opacity-50 text-black font-semibold rounded-lg py-2.5 text-sm transition"
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card de Métrica ─────────────────────────────────────────
+function MetricCard({ label, value, sub, color }) {
+  return (
+    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${color || 'text-white'}`}>{value ?? '—'}</p>
+      {sub && <p className="text-xs text-gray-600 mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Modal de confirmação ─────────────────────────────────────
+function ConfirmModal({ lead, onConfirm, onCancel, loading }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+      <div className="bg-[#1a1d27] border border-gray-700 rounded-2xl p-6 w-full max-w-sm">
+        <h3 className="text-white font-semibold mb-2">Confirmar Conversão</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          Marcar <span className="text-white font-medium">{lead.restaurant_name || lead.name || lead.phone}</span> como convertido?
+        </p>
+        <p className="text-xs text-gray-600 mb-5">Isso define <code className="text-brand">first_order_at = agora</code> e atualiza o status para convertido.</p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 border border-gray-700 text-gray-400 rounded-lg py-2 text-sm hover:border-gray-600 transition">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={loading} className="flex-1 bg-brand hover:bg-brand/90 disabled:opacity-50 text-black font-semibold rounded-lg py-2 text-sm transition">
+            {loading ? 'Salvando...' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Linha da tabela ──────────────────────────────────────────
+function LeadRow({ lead, isGestor, onConvert }) {
+  const converted = !!lead.first_order_at;
+  return (
+    <tr className="border-b border-gray-800/50 hover:bg-white/[0.02] transition">
+      <td className="px-4 py-3">
+        <div className="font-medium text-sm text-white truncate max-w-[160px]">
+          {lead.restaurant_name || lead.name || '—'}
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5">{lead.phone}</div>
+      </td>
+      <td className="px-4 py-3 text-sm text-gray-400">{lead.city || '—'}</td>
+      <td className="px-4 py-3 text-sm text-gray-400 hidden md:table-cell">{lead.segment || '—'}</td>
+      <td className="px-4 py-3 text-sm text-gray-400 hidden lg:table-cell">
+        {lead.weekly_volume_kg ? `${lead.weekly_volume_kg}kg` : '—'}
+      </td>
+      <td className="px-4 py-3 hidden lg:table-cell">
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tempBadge(lead.lead_temperature)}`}>
+          {lead.lead_temperature || '—'}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(converted ? 'converted' : lead.lead_status)}`}>
+          {converted ? 'Convertido' : statusLabel(lead.lead_status)}
+        </span>
+      </td>
+      {isGestor && (
+        <td className="px-4 py-3 text-sm text-gray-400 hidden md:table-cell">{rtLabel(lead.routing_team)}</td>
+      )}
+      <td className="px-4 py-3 text-xs text-gray-500 hidden xl:table-cell">{fmtDate(lead.handoff_at)}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <a
+            href={`https://wa.me/${lead.phone}`} target="_blank" rel="noopener"
+            className="inline-flex items-center gap-1 text-xs bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 rounded-lg px-2 py-1 transition"
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            WA
+          </a>
+          {!converted && lead.handoff_at && (
+            <button
+              onClick={() => onConvert(lead)}
+              className="text-xs bg-brand/10 hover:bg-brand/20 border border-brand/20 text-brand rounded-lg px-2 py-1 transition"
+            >
+              Converter
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── Painel Principal ─────────────────────────────────────────
+function Dashboard({ user, profile, onLogout }) {
+  const [leads, setLeads]       = React.useState([]);
+  const [loading, setLoading]   = React.useState(true);
+  const [search, setSearch]     = React.useState('');
+  const [filterStatus, setFilterStatus] = React.useState('all');
+  const [converting, setConverting] = React.useState(null); // lead sendo convertido
+  const [confirmModal, setConfirmModal] = React.useState(null);
+
+  const isGestor = profile?.role === 'gestor';
+
+  const loadLeads = async () => {
+    setLoading(true);
+    const { data, error } = await sb
+      .from('ai_sdr_leads')
+      .select('id,phone,name,restaurant_name,city,segment,weekly_volume_kg,lead_temperature,lead_status,routing_team,handoff_at,first_order_at,qual_stage,current_supplier,pain_point')
+      .order('handoff_at', { ascending: false, nullsLast: true });
+    if (!error) setLeads(data || []);
+    setLoading(false);
+  };
+
+  React.useEffect(() => { loadLeads(); }, []);
+
+  const handleConvert = async (lead) => {
+    setConverting(lead.id);
+    const now = new Date().toISOString();
+    const { error } = await sb
+      .from('ai_sdr_leads')
+      .update({ first_order_at: now, lead_status: 'converted' })
+      .eq('id', lead.id);
+    if (!error) {
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, first_order_at: now, lead_status: 'converted' } : l));
+    }
+    setConverting(null);
+    setConfirmModal(null);
+  };
+
+  // Métricas
+  const total      = leads.length;
+  const pendentes  = leads.filter(l => l.handoff_at && !l.first_order_at && l.lead_status !== 'optout').length;
+  const convertidos = leads.filter(l => !!l.first_order_at).length;
+  const hoje = new Date().toDateString();
+  const handoffsHoje = leads.filter(l => l.handoff_at && new Date(l.handoff_at).toDateString() === hoje).length;
+
+  // Filtros
+  const filtered = leads.filter(l => {
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      (l.restaurant_name || '').toLowerCase().includes(q) ||
+      (l.name || '').toLowerCase().includes(q) ||
+      (l.phone || '').includes(q) ||
+      (l.city || '').toLowerCase().includes(q);
+    const matchStatus = filterStatus === 'all' ||
+      (filterStatus === 'converted' ? !!l.first_order_at : l.lead_status === filterStatus);
+    return matchSearch && matchStatus;
+  });
+
+  return (
+    <div className="min-h-screen bg-[#0f1117] text-white">
+      {/* Header */}
+      <header className="border-b border-gray-800 bg-[#1a1d27]/80 backdrop-blur-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center">
+              <span className="text-xs font-bold text-brand">ASB</span>
+            </div>
+            <div className="hidden sm:block">
+              <span className="text-sm font-medium text-white">Painel de Vendedores</span>
+              {isGestor && <span className="ml-2 text-xs bg-brand/10 text-brand border border-brand/20 rounded px-1.5 py-0.5">Gestor</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 hidden sm:block">{user.email}</span>
+            <button
+              onClick={onLogout}
+              className="text-xs border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 rounded-lg px-3 py-1.5 transition"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Métricas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <MetricCard label="Total de Leads" value={total} color="text-white" />
+          <MetricCard label="Handoffs Pendentes" value={pendentes} color="text-yellow-400" />
+          <MetricCard label="Handoffs Hoje" value={handoffsHoje} color="text-blue-400" />
+          <MetricCard label="Convertidos" value={convertidos} color="text-brand" />
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <input
+            type="text" placeholder="Buscar por nome, telefone ou cidade..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="flex-1 bg-[#1a1d27] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 transition"
+          />
+          <select
+            value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="bg-[#1a1d27] border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-400 focus:outline-none focus:border-gray-600 transition"
+          >
+            <option value="all">Todos os status</option>
+            <option value="new">Novos</option>
+            <option value="qualified">Qualificados</option>
+            <option value="converted">Convertidos</option>
+            <option value="optout">Opt-out</option>
+          </select>
+          <button onClick={loadLeads} className="text-sm border border-gray-800 text-gray-400 hover:text-white rounded-lg px-3 py-2 transition">
+            ↻ Atualizar
+          </button>
+        </div>
+
+        {/* Tabela */}
+        <div className="bg-[#1a1d27] border border-gray-800 rounded-xl overflow-hidden">
+          {loading ? (
+            <div className="text-center py-16 text-gray-600 text-sm">Carregando leads...</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16 text-gray-600 text-sm">Nenhum lead encontrado.</div>
+          ) : (
+            <div className="overflow-x-auto scrollbar-hide">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800 text-left">
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500">Lead</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500">Cidade</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 hidden md:table-cell">Segmento</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 hidden lg:table-cell">Volume</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 hidden lg:table-cell">Temp.</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500">Status</th>
+                    {isGestor && <th className="px-4 py-3 text-xs font-medium text-gray-500 hidden md:table-cell">Vendedor</th>}
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 hidden xl:table-cell">Handoff em</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(lead => (
+                    <LeadRow
+                      key={lead.id}
+                      lead={lead}
+                      isGestor={isGestor}
+                      onConvert={(l) => setConfirmModal(l)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-700 mt-3 text-right">{filtered.length} lead{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''}</p>
+      </main>
+
+      {/* Modal confirmação conversão */}
+      {confirmModal && (
+        <ConfirmModal
+          lead={confirmModal}
+          loading={converting === confirmModal.id}
+          onConfirm={() => handleConvert(confirmModal)}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── App Root ─────────────────────────────────────────────────
+function App() {
+  const [session, setSession]   = React.useState(undefined); // undefined = loading
+  const [profile, setProfile]   = React.useState(null);
+
+  React.useEffect(() => {
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  React.useEffect(() => {
+    if (!session) { setProfile(null); return; }
+    sb.from('user_profiles')
+      .select('routing_team,role')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data }) => setProfile(data));
+  }, [session]);
+
+  const handleLogout = async () => {
+    await sb.auth.signOut();
+    setProfile(null);
+  };
+
+  // Loading inicial
+  if (session === undefined) {
+    return (
+      <div className="min-h-screen bg-[#0f1117] flex items-center justify-center">
+        <div className="text-gray-600 text-sm">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!session) return <Login onLogin={() => {}} />;
+
+  return (
+    <Dashboard
+      user={session.user}
+      profile={profile}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
