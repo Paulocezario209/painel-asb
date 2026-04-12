@@ -32,10 +32,9 @@
 
 <script type="text/babel">
 const SUPABASE_URL  = 'https://bovzlvumowgmqlfzciah.supabase.co';
-// TEMP: service key para validação — reverter para anon+RLS após confirmar painel
-const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvdnpsdnVtb3dnbXFsZnpjaWFoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzEwMjkxMCwiZXhwIjoyMDg4Njc4OTEwfQ.JDsJuWzf5b16orRrBYUwaU5y6HY9zEQGiuoSQeIE2JM';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvdnpsdnVtb3dnbXFsZnpjaWFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDI5MTAsImV4cCI6MjA4ODY3ODkxMH0.yxttun0HNg0iPvdwC_g_pWu7IsQuOldMsvgUuEuVvsg';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ─── Helpers ────────────────────────────────────────────────
 const fmtDate = (iso) => {
@@ -395,8 +394,9 @@ function App() {
   const [profile, setProfile]   = React.useState(null);
 
   React.useEffect(() => {
-    sb.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    // Usa apenas onAuthStateChange — garante que o cliente já aplicou o JWT
+    // antes de qualquer query ao Supabase (evita fetchLeads com token null)
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_e, s) => setSession(s ?? null));
     return () => subscription.unsubscribe();
   }, []);
 
